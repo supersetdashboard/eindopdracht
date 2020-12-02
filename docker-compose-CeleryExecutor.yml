@@ -1,0 +1,261 @@
+x-superset-image: &superset-image apache/incubator-superset:latest-dev
+x-superset-depends-on: &superset-depends-on
+  - db
+  - redis
+x-superset-volumes: &superset-volumes
+# /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
+    - ./incubator-superset/docker:/app/docker
+    - ./incubator-superset/superset:/app/superset
+    - ./incubator-superset/superset-frontend:/app/superset-frontend
+    - ./incubator-superset/superset_home:/app/superset_home
+
+
+version: '2.1'
+services:
+    redis_airflow:
+        image: 'redis:3.2.7'
+        volumes:
+            - ./redisDataAirflow:/data
+
+        # command: redis-server --requirepass redispass
+
+    postgres:
+        image: postgres:9.6
+        environment:
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        # Uncomment these lines to persist data on the local filesystem.
+            #- PGDATA=/var/lib/postgresql/data/pgdata
+        #volumes:
+             #- ./pgdata:/var/lib/postgresql/data/pgdata
+        ports: 
+            - "8866:5432"     
+    postgresdata:
+        image: postgres
+        restart: always
+        environment: 
+            - DATABASE_HOST=127.0.0.1
+            - POSTGRES_USER=root
+            - POSTGRES_PASSWORD=root
+            - POSTGRES_DB=root   
+        ports: 
+            - "8877:5432"
+        volumes: 
+            - ./docker_postgres_init.sql:/docker-entrypoint-initdb.d/docker_postgres_init.sql
+
+    pgadmin-compose:
+        image: dpage/pgadmin4
+        environment: 
+            PGADMIN_DEFAULT_EMAIL: "test@gmail.com"
+            PGADMIN_DEFAULT_PASSWORD: "test123!"
+        ports: 
+            - "16543:80"
+        depends_on: 
+            - postgresdata 
+
+    webserver:
+        image: airflow-image:latest
+        restart: always
+        depends_on:
+            - postgres
+            - redis_airflow
+        environment:
+            - LOAD_EX=n
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            # - POSTGRES_USER=airflow
+            # - POSTGRES_PASSWORD=airflow
+            # - POSTGRES_DB=airflow
+            # - REDIS_PASSWORD=redispass
+        volumes:
+            - ./dags:/usr/local/airflow/dags
+            - ./airflow-logs:/opt/airflow/logs
+            # Uncomment to include custom plugins
+            # - ./plugins:/usr/local/airflow/plugins
+        ports:
+            - "8080:8080"
+        command: webserver
+        healthcheck:
+            test: ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"]
+            interval: 30s
+            timeout: 30s
+            retries: 3
+
+    flower:
+        image: airflow-image:latest
+        restart: always
+        depends_on:
+            - redis_airflow
+        environment:
+            - EXECUTOR=Celery
+            # - REDIS_PASSWORD=redispass
+        ports:
+            - "5555:5555"
+        command: flower
+
+    scheduler:
+        image: airflow-image:latest
+        restart: always
+        depends_on:
+            - webserver
+        volumes:
+            - ./dags:/usr/local/airflow/dags
+            - ./completed_numberplate:/opt/completed_numberplate
+            # Uncomment to include custom plugins
+            # - ./plugins:/usr/local/airflow/plugins
+        environment:
+            - LOAD_EX=n
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            # - POSTGRES_USER=airflow
+            # - POSTGRES_PASSWORD=airflow
+            # - POSTGRES_DB=airflow
+            # - REDIS_PASSWORD=redispass
+        command: scheduler
+
+    worker:
+        image: airflow-image:latest
+        restart: always
+        depends_on:
+            - scheduler
+        volumes:
+            - ./dags:/usr/local/airflow/dags
+            - ./completed_numberplate:/opt/completed_numberplate
+            # Uncomment to include custom plugins
+            # - ./plugins:/usr/local/airflow/plugins
+        environment:
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            # - POSTGRES_USER=airflow
+            # - POSTGRES_PASSWORD=airflow
+            # - POSTGRES_DB=airflow
+            # - REDIS_PASSWORD=redispass
+        command: worker
+
+    #mysql:
+        #image: mysql:5.7
+        #restart: always
+        #environment:
+            #MYSQL_USER: ${MYSQL_USER}
+            #MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+            #MYSQL_DATABASE: ${MYSQL_DATABASE}
+            #MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+        #ports:
+            #- 3306:3306
+        #volumes:
+            #- ./mysql:/var/lib/mysql
+
+    #adminer:
+        #image: adminer
+        #restart: always
+        #ports:
+            #- 8050:8080
+
+    #superset:
+        #image: abhioncbr/docker-superset:${SUPERSET_VERSION}
+        #restart: always
+        #environment:
+            #MYSQL_USER: ${MYSQL_USER}
+            #MYSQL_PASS: ${MYSQL_PASSWORD}
+            #MYSQL_DATABASE: ${MYSQL_DATABASE}
+            #MYSQL_HOST: ${MYSQL_HOST}
+            #MYSQL_PORT: ${MYSQL_PORT}
+            #REDIS_HOST: ${REDIS_HOST}
+            #REDIS_PORT: ${REDIS_PORT}
+            #SUPERSET_ENV: ${SUPERSET_ENV}
+            #GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
+        #ports:
+            #- 8088:8088
+            #- 6767:6767
+        #depends_on:
+            #- mysql
+            #- redis
+        #volumes:
+            #- ./config2:/home/superset/config
+            
+    redis:
+        image: redis:3.2
+        container_name: superset_cache
+        restart: unless-stopped
+        ports:
+              - "127.0.0.1:6379:6379"
+        volumes:
+             - ./incubator-superset/redis:/data
+    
+    db:
+        env_file: ./incubator-superset/docker/.env
+        image: postgres:10
+        container_name: superset_db
+        restart: unless-stopped
+        ports:
+            - "127.0.0.1:5432:5432"
+        volumes:
+            - db_home:/var/lib/postgresql/data
+
+    superset:
+        env_file: ./incubator-superset/docker/.env
+        image: *superset-image
+        container_name: superset_app
+        command: ["/app/docker/docker-bootstrap.sh", "app"]
+        restart: unless-stopped
+        ports:
+            - 8088:8088
+        user: "root"
+        depends_on: *superset-depends-on
+        volumes: *superset-volumes
+
+    superset-init:
+        image: *superset-image
+        container_name: superset_init
+        command: ["/app/docker/docker-init.sh"]
+        env_file: ./incubator-superset/docker/.env
+        depends_on: *superset-depends-on
+        user: "root"
+        volumes: *superset-volumes 
+    
+    superset-node:
+        image: node:12
+        container_name: superset_node
+        command: ["bash", "-c", "cd /app/superset-frontend && npm install -f --no-optional --global webpack webpack-cli && npm install -f --no-optional && npm run dev"]
+        env_file: ./incubator-superset/docker/.env
+        depends_on: *superset-depends-on
+        volumes: *superset-volumes
+
+    superset-worker:
+        image: *superset-image
+        container_name: superset_worker
+        command: ["/app/docker/docker-bootstrap.sh", "worker"]
+        env_file: ./incubator-superset/docker/.env
+        restart: unless-stopped
+        depends_on: *superset-depends-on
+        user: "root"
+        volumes: *superset-volumes
+
+    superset-tests-worker:
+        image: *superset-image
+        container_name: superset_tests_worker
+        command: ["/app/docker/docker-bootstrap.sh", "worker"]
+        env_file: ./incubator-superset/docker/.env
+        environment:
+            DATABASE_HOST: localhost
+            DATABASE_DB: test
+            REDIS_CELERY_DB: 2
+            REDIS_RESULTS_DB: 3
+            REDIS_HOST: localhost
+        network_mode: host
+        depends_on: *superset-depends-on
+        user: "root"
+        volumes: *superset-volumes
+
+volumes:
+    mysql:
+        external: false
+    superset_home:
+        external: false
+    db_home:
+        external: false
+    redis:
+        external: false
+
+  
