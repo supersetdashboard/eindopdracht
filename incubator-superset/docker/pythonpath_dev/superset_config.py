@@ -80,6 +80,7 @@ class CeleryConfig(object):
 
 CELERY_CONFIG = CeleryConfig
 SQLLAB_CTAS_NO_LIMIT = True
+ENABLE_ROW_LEVEL_SECURITY = True
 
 #
 # Optionally import superset_config_docker.py (which will have been included on

@@ -46,7 +46,8 @@ def dashboard_database():
     print(frame)
 
     dashboard = frame.loc[frame['kenteken'].isin(df_new.kenteken)]
-    dashboard.to_sql(con=engine,schema='myschema', name='dashboard_table',if_exists='replace')
+    print (dashboard) 
+    dashboard.to_sql(con=engine,schema='myschema', name='dashboard_table', if_exists='replace')
     print (dashboard)  
     
 

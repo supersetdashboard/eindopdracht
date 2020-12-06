@@ -55,7 +55,7 @@ services:
             - postgresdata 
 
     webserver:
-        image: airflow-image:latest
+        image: jbodde/airflow-image:firsttry
         restart: always
         depends_on:
             - postgres
@@ -83,7 +83,7 @@ services:
             retries: 3
 
     flower:
-        image: airflow-image:latest
+        image: jbodde/airflow-image:firsttry
         restart: always
         depends_on:
             - redis_airflow
@@ -95,7 +95,7 @@ services:
         command: flower
 
     scheduler:
-        image: airflow-image:latest
+        image: jbodde/airflow-image:firsttry
         restart: always
         depends_on:
             - webserver
@@ -115,7 +115,7 @@ services:
         command: scheduler
 
     worker:
-        image: airflow-image:latest
+        image: jbodde/airflow-image:firsttry
         restart: always
         depends_on:
             - scheduler
